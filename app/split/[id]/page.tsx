@@ -6,9 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { IndianRupee, Users, RefreshCw, CheckCircle2, Clock, Wallet, Check, Copy } from "lucide-react";
 import { getStoredUserId, fetchUserProfile } from '@/lib/user';
 import OnboardingModal from '@/components/OnboardingModal';
+import Link from 'next/link';
+import { ChevronLeft, IndianRupee, Users, RefreshCw, CheckCircle2, Clock, Wallet, Check, Copy } from "lucide-react";
 
 interface Participant {
     id: string;
@@ -162,6 +163,12 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
     return (
         <main className="flex-1 bg-muted/30 p-4 md:p-8 flex flex-col items-center">
             <div className="w-full max-w-lg space-y-6">
+                <div className="flex items-center justify-between w-full mb-2">
+                    <Link href="/" className="inline-flex items-center text-sm font-semibold text-muted-foreground hover:text-primary transition-colors">
+                        <ChevronLeft className="h-4 w-4 mr-1" /> Back to home
+                    </Link>
+                </div>
+
                 {/* Main Bill Card */}
                 <Card className="border-none shadow-xl overflow-hidden">
                     <div className="bg-green-600 h-2 w-full" />
@@ -171,8 +178,8 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                                 <CardTitle className="text-2xl font-bold">{split.description}</CardTitle>
                                 <CardDescription>Created by {split.creatorName} {isCreator && '(You)'}</CardDescription>
                             </div>
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                {allPaid ? 'Settled' : 'Active'}
+                            <Badge variant="outline" className={`${allPaid ? 'bg-green-50 text-green-700 border-green-200' : 'hidden'}`}>
+                                {allPaid ? 'Settled' : ''}
                             </Badge>
                         </div>
                     </CardHeader>
@@ -185,6 +192,7 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                             <div className="text-right space-y-1">
                                 <p className="text-xs font-bold text-green-700 uppercase tracking-wider italic">Share / Person</p>
                                 <p className="text-3xl font-black text-green-600">₹{(split.perPersonAmount / 100).toLocaleString('en-IN')}</p>
+                                <p className="text-[10px] text-muted-foreground font-medium">Split amongst {split.participants.length} people</p>
                             </div>
                         </div>
                     </CardContent>
