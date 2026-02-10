@@ -46,7 +46,7 @@ export async function GET(
                 })),
                 stats: {
                     totalPaid: paidCount,
-                    totalPending: participants.length - paidCount,
+                    totalPending: split.number_of_people - paidCount,
                     amountCollected: paidCount * split.per_person_amount
                 }
             }

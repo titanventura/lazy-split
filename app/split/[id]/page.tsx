@@ -28,6 +28,7 @@ interface SplitData {
     creatorName: string;
     creatorUpiId: string;
     creatorId: string | null;
+    createdAt: string;
     participants: Participant[];
     stats: {
         totalPaid: number;
@@ -176,7 +177,12 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                         <div className="flex justify-between items-start">
                             <div>
                                 <CardTitle className="text-2xl font-bold">{split.description}</CardTitle>
-                                <CardDescription>Created by {split.creatorName} {isCreator && '(You)'}</CardDescription>
+                                <CardDescription className="flex flex-col gap-1 mt-1">
+                                    <span>Created by {split.creatorName} {isCreator && '(You)'}</span>
+                                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                                        <Clock className="h-3 w-3" /> {new Date(split.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                    </span>
+                                </CardDescription>
                             </div>
                             <Badge variant="outline" className={`${allPaid ? 'bg-green-50 text-green-700 border-green-200' : 'hidden'}`}>
                                 {allPaid ? 'Settled' : ''}
@@ -192,7 +198,7 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                             <div className="text-right space-y-1">
                                 <p className="text-xs font-bold text-green-700 uppercase tracking-wider italic">Share / Person</p>
                                 <p className="text-3xl font-black text-green-600">₹{(split.perPersonAmount / 100).toLocaleString('en-IN')}</p>
-                                <p className="text-[10px] text-muted-foreground font-medium">Split amongst {split.participants.length} people</p>
+                                <p className="text-[10px] text-muted-foreground font-medium">Split amongst {split.numberOfPeople} people</p>
                             </div>
                         </div>
                     </CardContent>
@@ -208,12 +214,12 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                         ))}
                     </div>
                     <p className="text-xs text-muted-foreground font-medium">
-                        {split.stats.totalPaid} of {split.participants.length} paid
+                        {split.stats.totalPaid} of {split.numberOfPeople} paid
                     </p>
                     <div className="ml-auto w-24 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
                             className="h-full bg-green-500 transition-all duration-500"
-                            style={{ width: `${(split.stats.totalPaid / split.participants.length) * 100}%` }}
+                            style={{ width: `${(split.stats.totalPaid / split.numberOfPeople) * 100}%` }}
                         />
                     </div>
                 </div>
