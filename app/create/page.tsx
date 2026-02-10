@@ -2,11 +2,18 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { ArrowLeft, Loader2, IndianRupee, Users, CreditCard } from "lucide-react";
+import Link from 'next/link';
 
 export default function CreateSplit() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
 
     const [form, setForm] = useState({
         description: '',
@@ -23,7 +30,6 @@ export default function CreateSplit() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setError('');
 
         try {
             const res = await fetch('/api/splits', {
@@ -44,123 +50,140 @@ export default function CreateSplit() {
                 throw new Error(data.error || 'Failed to create split');
             }
 
-            // Copy link to clipboard
-            const shareUrl = `${window.location.origin}/split/${data.data.id}`;
-            await navigator.clipboard.writeText(shareUrl);
-
-            router.push(`/split/${data.data.id}`);
+            toast.success("Split created successfully!");
+            router.push(`/split/${data.data.id}?creator=true`);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong');
+            toast.error(err instanceof Error ? err.message : 'Something went wrong');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <main className="min-h-screen bg-gray-50 p-4">
-            <div className="max-w-md mx-auto">
-                <h1 className="text-2xl font-bold text-gray-900 mb-6">Create a Split</h1>
+        <main className="flex-1 bg-muted/30 p-4 md:p-8 flex flex-col items-center">
+            <div className="w-full max-w-lg space-y-4">
+                <Button variant="ghost" size="sm" asChild className="mb-2">
+                    <Link href="/">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Home
+                    </Link>
+                </Button>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            What&apos;s this for?
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            maxLength={100}
-                            placeholder="Dinner at BBQ Nation"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            value={form.description}
-                            onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        />
-                    </div>
+                <Card className="shadow-xl border-none">
+                    <CardHeader className="space-y-1">
+                        <CardTitle className="text-2xl font-bold">Create Split</CardTitle>
+                        <CardDescription>Enter bill details to share with your friends</CardDescription>
+                    </CardHeader>
+                    <form onSubmit={handleSubmit}>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="description">What&apos;s this for?</Label>
+                                <Input
+                                    id="description"
+                                    required
+                                    maxLength={100}
+                                    placeholder="e.g. Dinner at BBQ Nation"
+                                    className="h-11"
+                                    value={form.description}
+                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                />
+                            </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Total Amount (₹)
-                        </label>
-                        <input
-                            type="number"
-                            required
-                            min="10"
-                            max="100000"
-                            placeholder="2400"
-                            inputMode="numeric"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            value={form.totalAmount}
-                            onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
-                        />
-                    </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="totalAmount" className="flex items-center">
+                                        Total Amount <IndianRupee className="ml-1 h-3 w-3" />
+                                    </Label>
+                                    <Input
+                                        id="totalAmount"
+                                        type="number"
+                                        required
+                                        min="10"
+                                        max="100000"
+                                        placeholder="2400"
+                                        className="h-11"
+                                        value={form.totalAmount}
+                                        onChange={(e) => setForm({ ...form, totalAmount: e.target.value })}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="people" className="flex items-center">
+                                        People <Users className="ml-1 h-3 w-3" />
+                                    </Label>
+                                    <Select
+                                        value={form.numberOfPeople}
+                                        onValueChange={(v) => setForm({ ...form, numberOfPeople: v })}
+                                    >
+                                        <SelectTrigger id="people" className="h-11">
+                                            <SelectValue placeholder="How many?" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20].map((n) => (
+                                                <SelectItem key={n} value={n.toString()}>{n} people</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Number of People
-                        </label>
-                        <select
-                            required
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            value={form.numberOfPeople}
-                            onChange={(e) => setForm({ ...form, numberOfPeople: e.target.value })}
-                        >
-                            {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                                <option key={n} value={n}>{n} people</option>
-                            ))}
-                        </select>
-                    </div>
+                            <div className="space-y-4 pt-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="creatorName">Your Name</Label>
+                                    <Input
+                                        id="creatorName"
+                                        required
+                                        maxLength={50}
+                                        placeholder="e.g. Rahul Kumar"
+                                        className="h-11"
+                                        value={form.creatorName}
+                                        onChange={(e) => setForm({ ...form, creatorName: e.target.value })}
+                                    />
+                                </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Your Name
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            maxLength={50}
-                            placeholder="Rahul Kumar"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            value={form.creatorName}
-                            onChange={(e) => setForm({ ...form, creatorName: e.target.value })}
-                        />
-                    </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="creatorUpiId" className="flex items-center">
+                                        Your UPI ID <CreditCard className="ml-1 h-3 w-3" />
+                                    </Label>
+                                    <Input
+                                        id="creatorUpiId"
+                                        required
+                                        placeholder="yourname@paytm"
+                                        className="h-11"
+                                        value={form.creatorUpiId}
+                                        onChange={(e) => setForm({ ...form, creatorUpiId: e.target.value })}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                        Used for generating payment links
+                                    </p>
+                                </div>
+                            </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Your UPI ID
-                        </label>
-                        <input
-                            type="text"
-                            required
-                            placeholder="yourname@paytm or 9876543210"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                            value={form.creatorUpiId}
-                            onChange={(e) => setForm({ ...form, creatorUpiId: e.target.value })}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">Your UPI ID or phone number linked to UPI</p>
-                    </div>
-
-                    {perPerson > 0 && (
-                        <div className="bg-green-50 p-4 rounded-lg text-center">
-                            <p className="text-sm text-gray-600">Each person pays</p>
-                            <p className="text-2xl font-bold text-green-600">₹{perPerson.toFixed(0)}</p>
-                        </div>
-                    )}
-
-                    {error && (
-                        <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-green-600 text-white font-semibold py-4 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                        {loading ? 'Creating...' : 'Create & Share Link'}
-                    </button>
-                </form>
+                            {perPerson > 0 && (
+                                <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-2xl border border-green-100 dark:border-green-900/30 text-center animate-in zoom-in-95 duration-300">
+                                    <p className="text-xs text-green-700 dark:text-green-400 font-bold uppercase tracking-widest mb-1">Each person pays</p>
+                                    <div className="text-4xl font-extrabold text-green-600 dark:text-green-500">
+                                        ₹{perPerson.toLocaleString('en-IN')}
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                        <CardFooter>
+                            <Button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full h-14 text-lg font-bold bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20 rounded-xl"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    'Create & Share Link'
+                                )}
+                            </Button>
+                        </CardFooter>
+                    </form>
+                </Card>
             </div>
         </main>
     );

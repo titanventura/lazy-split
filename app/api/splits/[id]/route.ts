@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(
     request: NextRequest,
@@ -8,34 +8,22 @@ export async function GET(
     try {
         const { id } = await params;
 
-        const split = db.prepare(`
-      SELECT * FROM splits WHERE id = ?
-    `).get(id) as {
-            id: string;
-            description: string;
-            total_amount: number;
-            number_of_people: number;
-            per_person_amount: number;
-            creator_name: string;
-            creator_upi_id: string;
-            created_at: string;
-        } | undefined;
+        // Fetch split with its participants in one go
+        const { data: split, error } = await supabase
+            .from('splits')
+            .select(`
+                *,
+                participants (*)
+            `)
+            .eq('id', id)
+            .single();
 
-        if (!split) {
+        if (error || !split) {
             return NextResponse.json({ success: false, error: 'Split not found' }, { status: 404 });
         }
 
-        const participants = db.prepare(`
-      SELECT * FROM participants WHERE split_id = ?
-    `).all(id) as Array<{
-            id: string;
-            split_id: string;
-            name: string;
-            has_paid: number;
-            marked_paid_at: string | null;
-        }>;
-
-        const paidCount = participants.filter(p => p.has_paid === 1).length;
+        const participants = split.participants || [];
+        const paidCount = participants.filter((p: any) => p.has_paid === true).length;
 
         return NextResponse.json({
             success: true,
@@ -48,10 +36,10 @@ export async function GET(
                 creatorName: split.creator_name,
                 creatorUpiId: split.creator_upi_id,
                 createdAt: split.created_at,
-                participants: participants.map(p => ({
+                participants: participants.map((p: any) => ({
                     id: p.id,
                     name: p.name,
-                    hasPaid: p.has_paid === 1,
+                    hasPaid: p.has_paid,
                     markedPaidAt: p.marked_paid_at
                 })),
                 stats: {
@@ -62,8 +50,8 @@ export async function GET(
             }
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error fetching split:', error);
-        return NextResponse.json({ success: false, error: 'Failed to fetch split' }, { status: 500 });
+        return NextResponse.json({ success: false, error: error.message || 'Failed to fetch split' }, { status: 500 });
     }
 }

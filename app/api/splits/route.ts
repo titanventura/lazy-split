@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
-import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
     try {
@@ -12,24 +11,41 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
         }
 
-        const splitId = uuidv4();
         const perPersonAmount = Math.floor(totalAmount / numberOfPeople);
 
         // Create split
-        db.prepare(`
-      INSERT INTO splits (id, description, total_amount, number_of_people, per_person_amount, creator_name, creator_upi_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(splitId, description, totalAmount, numberOfPeople, perPersonAmount, creatorName, creatorUpiId);
+        const { data: split, error: splitError } = await supabase
+            .from('splits')
+            .insert({
+                description,
+                total_amount: totalAmount,
+                number_of_people: numberOfPeople,
+                per_person_amount: perPersonAmount,
+                creator_name: creatorName,
+                creator_upi_id: creatorUpiId
+            })
+            .select()
+            .single();
+
+        if (splitError) throw splitError;
+
+        const splitId = split.id;
 
         // Add participants if provided
         if (participantNames && Array.isArray(participantNames)) {
-            const insertParticipant = db.prepare(`
-        INSERT INTO participants (id, split_id, name) VALUES (?, ?, ?)
-      `);
-            for (const name of participantNames) {
-                if (name.trim()) {
-                    insertParticipant.run(uuidv4(), splitId, name.trim());
-                }
+            const participantsToInsert = participantNames
+                .filter(name => name.trim())
+                .map(name => ({
+                    split_id: splitId,
+                    name: name.trim()
+                }));
+
+            if (participantsToInsert.length > 0) {
+                const { error: partError } = await supabase
+                    .from('participants')
+                    .insert(participantsToInsert);
+
+                if (partError) throw partError;
             }
         }
 
@@ -38,8 +54,8 @@ export async function POST(request: NextRequest) {
             data: { id: splitId }
         }, { status: 201 });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error creating split:', error);
-        return NextResponse.json({ success: false, error: 'Failed to create split' }, { status: 500 });
+        return NextResponse.json({ success: false, error: error.message || 'Failed to create split' }, { status: 500 });
     }
 }

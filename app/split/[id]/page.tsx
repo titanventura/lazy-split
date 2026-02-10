@@ -2,6 +2,13 @@
 
 import { useState, useEffect, use } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { IndianRupee, Users, Share2, RefreshCw, CheckCircle2, Clock, Wallet, Check, Copy } from "lucide-react";
 
 interface Participant {
     id: string;
@@ -31,7 +38,6 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
     const searchParams = useSearchParams();
     const [split, setSplit] = useState<SplitData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
     const [showNameModal, setShowNameModal] = useState(false);
     const [name, setName] = useState('');
     const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
@@ -39,16 +45,15 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
 
     const isCreator = searchParams.get('creator') === 'true';
 
-    const fetchSplit = async () => {
+    const fetchSplit = async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const res = await fetch(`/api/splits/${id}`);
             const data = await res.json();
-            if (!data.success) {
-                throw new Error(data.error);
-            }
+            if (!data.success) throw new Error(data.error);
             setSplit(data.data);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load split');
+            toast.error(err instanceof Error ? err.message : 'Failed to load split');
         } finally {
             setLoading(false);
         }
@@ -56,14 +61,12 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
 
     useEffect(() => {
         fetchSplit();
-        // Check localStorage for existing participant
         const stored = localStorage.getItem(`split-${id}`);
         if (stored) {
             setMyParticipantId(stored);
         } else if (!isCreator) {
             setShowNameModal(true);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id, isCreator]);
 
     const joinSplit = async () => {
@@ -79,29 +82,35 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                 setMyParticipantId(data.data.participantId);
                 localStorage.setItem(`split-${id}`, data.data.participantId);
                 setShowNameModal(false);
-                fetchSplit();
+                fetchSplit(true);
+                toast.success(`Welcome, ${name.trim()}!`);
             }
         } catch {
-            setError('Failed to join split');
+            toast.error('Failed to join split');
         }
     };
 
     const togglePaid = async (participantId: string, currentStatus: boolean) => {
         try {
-            await fetch(`/api/splits/${id}/participants/${participantId}`, {
+            const res = await fetch(`/api/splits/${id}/participants/${participantId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ hasPaid: !currentStatus }),
             });
-            fetchSplit();
+            const data = await res.json();
+            if (data.success) {
+                fetchSplit(true);
+                toast.success(currentStatus ? "Marked as unpaid" : "Marked as paid!");
+            }
         } catch {
-            setError('Failed to update status');
+            toast.error('Failed to update status');
         }
     };
 
     const copyLink = async () => {
-        await navigator.clipboard.writeText(window.location.href.split('?')[0]);
+        await navigator.clipboard.writeText(window.location.origin + window.location.pathname);
         setCopied(true);
+        toast.info("Link copied to clipboard!");
         setTimeout(() => setCopied(false), 2000);
     };
 
@@ -114,143 +123,206 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
 
     if (loading) {
         return (
-            <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <p className="text-gray-600">Loading...</p>
-            </main>
-        );
-    }
-
-    if (error || !split) {
-        return (
-            <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="text-center">
-                    <p className="text-red-600 mb-4">{error || 'Split not found'}</p>
-                    <a href="/" className="text-green-600 underline">Create a new split</a>
+            <main className="flex-1 bg-muted/30 p-4 md:p-8 flex flex-col items-center">
+                <div className="w-full max-w-lg space-y-4">
+                    <Skeleton className="h-[200px] w-full rounded-2xl" />
+                    <Skeleton className="h-[100px] w-full rounded-2xl" />
+                    <Skeleton className="h-[300px] w-full rounded-2xl" />
                 </div>
             </main>
         );
     }
+
+    if (!split) return null;
 
     const myParticipant = split.participants.find(p => p.id === myParticipantId);
     const allPaid = split.participants.length > 0 && split.stats.totalPending === 0;
 
     return (
-        <main className="min-h-screen bg-gray-50 p-4">
-            <div className="max-w-md mx-auto">
-                {/* Split Details */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
-                    <h1 className="text-xl font-bold text-gray-900">{split.description}</h1>
-                    <p className="text-gray-500 text-sm">by {split.creatorName}</p>
+        <main className="flex-1 bg-muted/30 p-4 md:p-8 flex flex-col items-center">
+            <div className="w-full max-w-lg space-y-6">
+                {/* Main Bill Card */}
+                <Card className="border-none shadow-xl overflow-hidden">
+                    <div className="bg-green-600 h-2 w-full" />
+                    <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle className="text-2xl font-bold">{split.description}</CardTitle>
+                                <CardDescription>Created by {split.creatorName}</CardDescription>
+                            </div>
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                Active
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="pt-4 border-t bg-muted/5">
+                        <div className="flex justify-between items-end">
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Total Amount</p>
+                                <p className="text-2xl font-bold">₹{(split.totalAmount / 100).toLocaleString('en-IN')}</p>
+                            </div>
+                            <div className="text-right space-y-1">
+                                <p className="text-xs font-bold text-green-700 uppercase tracking-wider italic">Your Share</p>
+                                <p className="text-3xl font-black text-green-600">₹{(split.perPersonAmount / 100).toLocaleString('en-IN')}</p>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                    <div className="mt-4 pt-4 border-t">
-                        <div className="flex justify-between">
-                            <span className="text-gray-600">Total</span>
-                            <span className="font-semibold">₹{(split.totalAmount / 100).toFixed(0)}</span>
-                        </div>
-                        <div className="flex justify-between mt-1">
-                            <span className="text-gray-600">Your share</span>
-                            <span className="text-xl font-bold text-green-600">₹{(split.perPersonAmount / 100).toFixed(0)}</span>
-                        </div>
+                {/* Status Bar */}
+                <div className="flex items-center gap-2 px-1">
+                    <div className="flex -space-x-2">
+                        {split.participants.slice(0, 5).map((p, i) => (
+                            <div key={p.id} className={`w-8 h-8 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold ${p.hasPaid ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
+                                {p.name.charAt(0).toUpperCase()}
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium">
+                        {split.stats.totalPaid} of {split.participants.length} paid
+                    </p>
+                    <div className="ml-auto w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-green-500 transition-all duration-500"
+                            style={{ width: `${(split.stats.totalPaid / split.participants.length) * 100}%` }}
+                        />
                     </div>
                 </div>
 
-                {/* Payment Section (for participants) */}
+                {/* Payment Card */}
                 {!isCreator && myParticipantId && !myParticipant?.hasPaid && (
-                    <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
-                        <button
-                            onClick={openUpiPayment}
-                            className="w-full bg-green-600 text-white font-bold py-4 rounded-lg text-lg hover:bg-green-700 transition-colors mb-3"
-                        >
-                            💰 Pay ₹{(split.perPersonAmount / 100).toFixed(0)} Now
-                        </button>
-                        <div className="text-center text-sm text-gray-500">
-                            <p>Or pay manually to:</p>
-                            <p className="font-mono text-gray-800">{split.creatorUpiId}</p>
+                    <Card className="border-none shadow-lg bg-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <CardContent className="p-6">
+                            <Button
+                                onClick={openUpiPayment}
+                                className="w-full h-16 text-xl font-black bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/30 rounded-2xl mb-4"
+                            >
+                                <Wallet className="mr-3 h-6 w-6" /> PAY NOW
+                            </Button>
+                            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground bg-muted/50 py-2 rounded-lg font-medium">
+                                <span className="opacity-50">UPI ID:</span>
+                                <span className="font-mono text-foreground font-bold">{split.creatorUpiId}</span>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {myParticipant?.hasPaid && (
+                    <div className="bg-green-600 text-white p-6 rounded-2xl shadow-lg flex items-center gap-4 animate-in zoom-in-95 duration-500">
+                        <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                            <Check className="h-6 w-6 stroke-[3px]" />
+                        </div>
+                        <div>
+                            <p className="font-black text-xl leading-tight">Paid!</p>
+                            <p className="text-xs text-white/80 font-medium">You&apos;ve settled your share. Awesome!</p>
                         </div>
                     </div>
                 )}
 
                 {/* Participants List */}
-                <div className="bg-white rounded-xl shadow-sm p-6 mb-4">
-                    <h2 className="font-semibold text-gray-900 mb-3">
-                        Who&apos;s Paid? ({split.stats.totalPaid}/{split.participants.length})
-                    </h2>
-
-                    {allPaid && (
-                        <div className="bg-green-50 text-green-700 p-3 rounded-lg mb-3 text-center">
-                            🎉 Everyone paid! Split complete.
-                        </div>
-                    )}
-
-                    <div className="space-y-2">
+                <Card className="border-none shadow-lg">
+                    <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                        <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+                            <Users className="h-4 w-4" /> Participants
+                        </CardTitle>
+                        {allPaid && <Badge className="bg-green-500 text-white border-transparent">Settled</Badge>}
+                    </CardHeader>
+                    <CardContent className="space-y-3">
                         {split.participants.map((p) => (
                             <div
                                 key={p.id}
-                                className={`flex items-center justify-between p-3 rounded-lg ${p.hasPaid ? 'bg-green-50' : 'bg-gray-50'
+                                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.hasPaid
+                                        ? 'bg-green-50/50 border-green-100'
+                                        : 'bg-background border-muted'
                                     }`}
                             >
-                                <div className="flex items-center gap-2">
-                                    <span>{p.hasPaid ? '✅' : '⏳'}</span>
-                                    <span className={p.id === myParticipantId ? 'font-semibold' : ''}>
-                                        {p.name}
-                                        {p.id === myParticipantId && ' (You)'}
-                                    </span>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${p.hasPaid ? 'bg-green-600 text-white' : 'bg-muted text-muted-foreground'
+                                        }`}>
+                                        {p.hasPaid ? <CheckCircle2 className="h-5 w-5" /> : p.name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <p className={`font-bold text-sm ${p.id === myParticipantId ? 'text-green-700' : ''}`}>
+                                            {p.name} {p.id === myParticipantId && '(You)'}
+                                        </p>
+                                        <div className="flex items-center gap-1">
+                                            {p.hasPaid ? (
+                                                <p className="text-[10px] text-green-600 font-bold uppercase tracking-tight">Paid</p>
+                                            ) : (
+                                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-tight flex items-center gap-1">
+                                                    <Clock className="h-2 w-2" /> Pending
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                                 {p.id === myParticipantId && (
-                                    <button
+                                    <Button
+                                        variant={p.hasPaid ? "outline" : "default"}
+                                        size="sm"
                                         onClick={() => togglePaid(p.id, p.hasPaid)}
-                                        className={`text-sm px-3 py-1 rounded ${p.hasPaid
-                                                ? 'bg-gray-200 text-gray-700'
-                                                : 'bg-green-600 text-white'
-                                            }`}
+                                        className={`rounded-lg font-bold text-xs h-8 ${!p.hasPaid && 'bg-green-600 hover:bg-green-700'}`}
                                     >
-                                        {p.hasPaid ? 'Unmark' : 'Mark Paid'}
-                                    </button>
+                                        {p.hasPaid ? 'Unmark' : 'I Paid'}
+                                    </Button>
                                 )}
                             </div>
                         ))}
-                    </div>
-                </div>
+                    </CardContent>
+                </Card>
 
-                {/* Actions */}
-                <div className="flex gap-3">
-                    <button
-                        onClick={fetchSplit}
-                        className="flex-1 bg-gray-100 text-gray-700 font-medium py-3 rounded-lg hover:bg-gray-200 transition-colors"
+                {/* Footer Actions */}
+                <div className="flex gap-3 pt-4">
+                    <Button
+                        variant="secondary"
+                        onClick={() => fetchSplit(false)}
+                        className="flex-1 h-12 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm"
                     >
-                        🔄 Refresh
-                    </button>
-                    <button
+                        <RefreshCw className="mr-2 h-4 w-4" /> Sync
+                    </Button>
+                    <Button
+                        variant="outline"
                         onClick={copyLink}
-                        className="flex-1 bg-gray-100 text-gray-700 font-medium py-3 rounded-lg hover:bg-gray-200 transition-colors"
+                        className="flex-1 h-12 text-xs font-bold uppercase tracking-wider rounded-xl shadow-sm bg-white"
                     >
-                        {copied ? '✓ Copied!' : '📋 Share Link'}
-                    </button>
+                        {copied ? (
+                            <><Check className="mr-2 h-4 w-4 text-green-600" /> Done</>
+                        ) : (
+                            <><Copy className="mr-2 h-4 w-4" /> Share</>
+                        )}
+                    </Button>
                 </div>
             </div>
 
-            {/* Name Modal */}
+            {/* Name Entry Overlay */}
             {showNameModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl p-6 w-full max-w-sm">
-                        <h2 className="text-lg font-bold text-gray-900 mb-4">What&apos;s your name?</h2>
-                        <input
-                            type="text"
-                            placeholder="Your name"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-green-500"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && joinSplit()}
-                            autoFocus
-                        />
-                        <button
-                            onClick={joinSplit}
-                            disabled={!name.trim()}
-                            className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 disabled:opacity-50"
-                        >
-                            Join Split
-                        </button>
-                    </div>
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-50 animate-in fade-in duration-300">
+                    <Card className="w-full max-w-sm border-none shadow-2xl animate-in slide-in-from-bottom-10 duration-500">
+                        <CardHeader>
+                            <CardTitle className="text-xl font-bold">Who are you?</CardTitle>
+                            <CardDescription>Enter your name to join this split and track your payment.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Input
+                                type="text"
+                                placeholder="e.g. Rahul Kumar"
+                                className="h-12 text-lg font-medium"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && joinSplit()}
+                                autoFocus
+                            />
+                        </CardContent>
+                        <CardFooter>
+                            <Button
+                                onClick={joinSplit}
+                                disabled={!name.trim()}
+                                className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20 rounded-xl"
+                            >
+                                Join Split
+                            </Button>
+                        </CardFooter>
+                    </Card>
                 </div>
             )}
         </main>

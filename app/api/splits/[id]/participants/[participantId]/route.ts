@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import db from '@/lib/db';
+import { supabase } from '@/lib/supabase';
 
 export async function PATCH(
     request: NextRequest,
@@ -14,21 +14,28 @@ export async function PATCH(
             return NextResponse.json({ success: false, error: 'hasPaid must be a boolean' }, { status: 400 });
         }
 
-        const participant = db.prepare('SELECT * FROM participants WHERE id = ?').get(participantId) as {
-            id: string;
-            name: string;
-            has_paid: number;
-        } | undefined;
+        // Check if participant exists
+        const { data: participant, error: partError } = await supabase
+            .from('participants')
+            .select('id, name')
+            .eq('id', participantId)
+            .single();
 
-        if (!participant) {
+        if (partError || !participant) {
             return NextResponse.json({ success: false, error: 'Participant not found' }, { status: 404 });
         }
 
         const markedPaidAt = hasPaid ? new Date().toISOString() : null;
 
-        db.prepare(`
-      UPDATE participants SET has_paid = ?, marked_paid_at = ? WHERE id = ?
-    `).run(hasPaid ? 1 : 0, markedPaidAt, participantId);
+        const { error: updateError } = await supabase
+            .from('participants')
+            .update({
+                has_paid: hasPaid,
+                marked_paid_at: markedPaidAt
+            })
+            .eq('id', participantId);
+
+        if (updateError) throw updateError;
 
         return NextResponse.json({
             success: true,
@@ -40,8 +47,8 @@ export async function PATCH(
             }
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error updating participant:', error);
-        return NextResponse.json({ success: false, error: 'Failed to update participant' }, { status: 500 });
+        return NextResponse.json({ success: false, error: error.message || 'Failed to update participant' }, { status: 500 });
     }
 }
