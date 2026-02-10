@@ -94,11 +94,11 @@ export default function Home() {
     <main className="flex-1 bg-gradient-to-b from-background to-muted/20 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-12 py-12">
         <div className="text-center space-y-4">
-          <h1 className="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl">
-            Split <span className="text-green-600">Smart</span>.
+          <h1 className="text-5xl font-extrabold tracking-tighter text-primary sm:text-6xl">
+            Split <span className="text-green-600 italic">Lazily</span>.
           </h1>
           <p className="text-xl text-muted-foreground font-medium">
-            The simplest way to settle bills with friends. No apps, no accounts, just split.
+            No friction, no apps, no complex math. Just split and chill.
           </p>
           <div className="pt-4">
             <Button size="lg" className="rounded-full px-8 py-7 text-lg bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20" asChild>
