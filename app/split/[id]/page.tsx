@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { IndianRupee, Users, Share2, RefreshCw, CheckCircle2, Clock, Wallet, Check, Copy } from "lucide-react";
+import { IndianRupee, Users, RefreshCw, CheckCircle2, Clock, Wallet, Check, Copy } from "lucide-react";
+import { getStoredUserId, fetchUserProfile } from '@/lib/user';
+import OnboardingModal from '@/components/OnboardingModal';
 
 interface Participant {
     id: string;
+    userId: string | null;
     name: string;
     hasPaid: boolean;
     markedPaidAt: string | null;
@@ -25,6 +26,7 @@ interface SplitData {
     perPersonAmount: number;
     creatorName: string;
     creatorUpiId: string;
+    creatorId: string | null;
     participants: Participant[];
     stats: {
         totalPaid: number;
@@ -35,15 +37,12 @@ interface SplitData {
 
 export default function SplitView({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
-    const searchParams = useSearchParams();
     const [split, setSplit] = useState<SplitData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [showNameModal, setShowNameModal] = useState(false);
-    const [name, setName] = useState('');
-    const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [userProfile, setUserProfile] = useState<{ name: string, upi_id?: string } | null>(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
     const [copied, setCopied] = useState(false);
-
-    const isCreator = searchParams.get('creator') === 'true';
 
     const fetchSplit = async (silent = false) => {
         if (!silent) setLoading(true);
@@ -52,42 +51,63 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
             const data = await res.json();
             if (!data.success) throw new Error(data.error);
             setSplit(data.data);
+            return data.data as SplitData;
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Failed to load split');
+            return null;
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchSplit();
-        const stored = localStorage.getItem(`split-${id}`);
-        if (stored) {
-            setMyParticipantId(stored);
-        } else if (!isCreator) {
-            setShowNameModal(true);
-        }
-    }, [id, isCreator]);
+        const storedId = getStoredUserId();
+        setUserId(storedId);
 
-    const joinSplit = async () => {
-        if (!name.trim()) return;
+        fetchSplit().then(data => {
+            if (data && storedId) {
+                // Check if user is already a participant
+                const isParticipant = data.participants.some(p => p.userId === storedId);
+                const isCreator = data.creatorId === storedId;
+
+                if (!isParticipant && !isCreator) {
+                    // Try to join automatically if we have a profile
+                    fetchUserProfile(storedId).then(profile => {
+                        if (profile) {
+                            joinSplit(profile.name, storedId);
+                        } else {
+                            setShowOnboarding(true);
+                        }
+                    });
+                }
+            } else if (!storedId) {
+                setShowOnboarding(true);
+            }
+        });
+    }, [id]);
+
+    const joinSplit = async (name: string, uid: string) => {
         try {
             const res = await fetch(`/api/splits/${id}/participants`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name.trim() }),
+                body: JSON.stringify({ name: name.trim(), userId: uid }),
             });
             const data = await res.json();
             if (data.success) {
-                setMyParticipantId(data.data.participantId);
-                localStorage.setItem(`split-${id}`, data.data.participantId);
-                setShowNameModal(false);
                 fetchSplit(true);
                 toast.success(`Welcome, ${name.trim()}!`);
+                setShowOnboarding(false);
             }
         } catch {
             toast.error('Failed to join split');
         }
+    };
+
+    const handleOnboardingComplete = (user: { id: string, name: string, upi_id?: string }) => {
+        setUserId(user.id);
+        setUserProfile({ name: user.name, upi_id: user.upi_id });
+        joinSplit(user.name, user.id);
     };
 
     const togglePaid = async (participantId: string, currentStatus: boolean) => {
@@ -135,7 +155,8 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
 
     if (!split) return null;
 
-    const myParticipant = split.participants.find(p => p.id === myParticipantId);
+    const myParticipant = split.participants.find(p => p.userId === userId);
+    const isCreator = split.creatorId === userId;
     const allPaid = split.participants.length > 0 && split.stats.totalPending === 0;
 
     return (
@@ -148,10 +169,10 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                         <div className="flex justify-between items-start">
                             <div>
                                 <CardTitle className="text-2xl font-bold">{split.description}</CardTitle>
-                                <CardDescription>Created by {split.creatorName}</CardDescription>
+                                <CardDescription>Created by {split.creatorName} {isCreator && '(You)'}</CardDescription>
                             </div>
                             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                Active
+                                {allPaid ? 'Settled' : 'Active'}
                             </Badge>
                         </div>
                     </CardHeader>
@@ -162,7 +183,7 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                                 <p className="text-2xl font-bold">₹{(split.totalAmount / 100).toLocaleString('en-IN')}</p>
                             </div>
                             <div className="text-right space-y-1">
-                                <p className="text-xs font-bold text-green-700 uppercase tracking-wider italic">Your Share</p>
+                                <p className="text-xs font-bold text-green-700 uppercase tracking-wider italic">Share / Person</p>
                                 <p className="text-3xl font-black text-green-600">₹{(split.perPersonAmount / 100).toLocaleString('en-IN')}</p>
                             </div>
                         </div>
@@ -172,7 +193,7 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                 {/* Status Bar */}
                 <div className="flex items-center gap-2 px-1">
                     <div className="flex -space-x-2">
-                        {split.participants.slice(0, 5).map((p, i) => (
+                        {split.participants.slice(0, 5).map((p) => (
                             <div key={p.id} className={`w-8 h-8 rounded-full border-2 border-background flex items-center justify-center text-[10px] font-bold ${p.hasPaid ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
                                 {p.name.charAt(0).toUpperCase()}
                             </div>
@@ -190,7 +211,7 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                 </div>
 
                 {/* Payment Card */}
-                {!isCreator && myParticipantId && !myParticipant?.hasPaid && (
+                {!isCreator && userId && !myParticipant?.hasPaid && (
                     <Card className="border-none shadow-lg bg-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <CardContent className="p-6">
                             <Button
@@ -232,8 +253,8 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                             <div
                                 key={p.id}
                                 className={`flex items-center justify-between p-4 rounded-xl border transition-all ${p.hasPaid
-                                        ? 'bg-green-50/50 border-green-100'
-                                        : 'bg-background border-muted'
+                                    ? 'bg-green-50/50 border-green-100'
+                                    : 'bg-background border-muted'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
@@ -242,8 +263,8 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                                         {p.hasPaid ? <CheckCircle2 className="h-5 w-5" /> : p.name.charAt(0).toUpperCase()}
                                     </div>
                                     <div>
-                                        <p className={`font-bold text-sm ${p.id === myParticipantId ? 'text-green-700' : ''}`}>
-                                            {p.name} {p.id === myParticipantId && '(You)'}
+                                        <p className={`font-bold text-sm ${p.userId === userId ? 'text-green-700' : ''}`}>
+                                            {p.name} {p.userId === userId && '(You)'}
                                         </p>
                                         <div className="flex items-center gap-1">
                                             {p.hasPaid ? (
@@ -256,14 +277,14 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                                         </div>
                                     </div>
                                 </div>
-                                {p.id === myParticipantId && (
+                                {(p.userId === userId || isCreator) && (
                                     <Button
                                         variant={p.hasPaid ? "outline" : "default"}
                                         size="sm"
                                         onClick={() => togglePaid(p.id, p.hasPaid)}
                                         className={`rounded-lg font-bold text-xs h-8 ${!p.hasPaid && 'bg-green-600 hover:bg-green-700'}`}
                                     >
-                                        {p.hasPaid ? 'Unmark' : 'I Paid'}
+                                        {p.hasPaid ? 'Unmark' : (p.userId === userId ? 'I Paid' : 'Mark Paid')}
                                     </Button>
                                 )}
                             </div>
@@ -294,37 +315,13 @@ export default function SplitView({ params }: { params: Promise<{ id: string }> 
                 </div>
             </div>
 
-            {/* Name Entry Overlay */}
-            {showNameModal && (
-                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 z-50 animate-in fade-in duration-300">
-                    <Card className="w-full max-w-sm border-none shadow-2xl animate-in slide-in-from-bottom-10 duration-500">
-                        <CardHeader>
-                            <CardTitle className="text-xl font-bold">Who are you?</CardTitle>
-                            <CardDescription>Enter your name to join this split and track your payment.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <Input
-                                type="text"
-                                placeholder="e.g. Rahul Kumar"
-                                className="h-12 text-lg font-medium"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && joinSplit()}
-                                autoFocus
-                            />
-                        </CardContent>
-                        <CardFooter>
-                            <Button
-                                onClick={joinSplit}
-                                disabled={!name.trim()}
-                                className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20 rounded-xl"
-                            >
-                                Join Split
-                            </Button>
-                        </CardFooter>
-                    </Card>
-                </div>
-            )}
+            <OnboardingModal
+                isOpen={showOnboarding}
+                onComplete={handleOnboardingComplete}
+                title="Join Split"
+                description="Enter your name to join this split and track your payment."
+                showUpi={false}
+            />
         </main>
     );
 }

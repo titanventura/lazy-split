@@ -1,11 +1,10 @@
--- SplitLink Supabase Schema
--- Run this in your Supabase SQL Editor
-
--- 1. Enable UUID extension (usually enabled by default)
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- 1. Drop existing tables if they exist to start fresh
+DROP TABLE IF EXISTS participants;
+DROP TABLE IF EXISTS splits;
+DROP TABLE IF EXISTS users;
 
 -- 2. Create 'users' table for friction-less onboarding
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   upi_id TEXT,
@@ -13,8 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- 3. Create 'splits' table
--- Note: 'total_amount' and 'per_person_amount' are in Paise (integer) to avoid floating point issues
-CREATE TABLE IF NOT EXISTS splits (
+CREATE TABLE splits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   description TEXT NOT NULL,
   total_amount BIGINT NOT NULL,
@@ -27,7 +25,7 @@ CREATE TABLE IF NOT EXISTS splits (
 );
 
 -- 4. Create 'participants' table
-CREATE TABLE IF NOT EXISTS participants (
+CREATE TABLE participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   split_id UUID REFERENCES splits(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES users(id), -- Linked to users table
@@ -37,31 +35,31 @@ CREATE TABLE IF NOT EXISTS participants (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 4. Performance Indexes
-CREATE INDEX IF NOT EXISTS idx_participants_split_id ON participants(split_id);
+-- 6. Performance Indexes
+CREATE INDEX idx_participants_split_id ON participants(split_id);
 
--- 5. Row Level Security (RLS)
+-- 7. Row Level Security (RLS)
 -- For MVP, we enable RLS but allow public access. 
 -- You can tighten these policies later for authenticated users.
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE splits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE participants ENABLE ROW LEVEL SECURITY;
 
--- 5a. Users policies
+-- 7a. Users policies
 CREATE POLICY "Allow public read access to users" ON users FOR SELECT USING (true);
 CREATE POLICY "Allow public insert access to users" ON users FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update access to users" ON users FOR UPDATE USING (true);
 
--- 5b. Splits policies
+-- 7b. Splits policies
 CREATE POLICY "Allow public read access to splits" ON splits FOR SELECT USING (true);
 CREATE POLICY "Allow public insert access to splits" ON splits FOR INSERT WITH CHECK (true);
 
--- 5c. Participants policies
+-- 7c. Participants policies
 CREATE POLICY "Allow public read access to participants" ON participants FOR SELECT USING (true);
 CREATE POLICY "Allow public insert access to participants" ON participants FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update access to participants" ON participants FOR UPDATE USING (true);
 
--- 6. Helper function for Realtime (optional)
+-- 8. Helper function for Realtime (optional)
 -- This allows the UI to potentially listen for payment updates
 ALTER PUBLICATION supabase_realtime ADD TABLE splits;
 ALTER PUBLICATION supabase_realtime ADD TABLE participants;

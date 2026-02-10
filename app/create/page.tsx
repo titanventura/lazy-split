@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,18 +10,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, IndianRupee, Users, CreditCard } from "lucide-react";
 import Link from 'next/link';
+import { getStoredUserId, fetchUserProfile } from '@/lib/user';
+import OnboardingModal from '@/components/OnboardingModal';
 
 export default function CreateSplit() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+    const [showOnboarding, setShowOnboarding] = useState(false);
 
     const [form, setForm] = useState({
         description: '',
         totalAmount: '',
-        numberOfPeople: '2',
+        numberOfPeople: '10', // Defaulted to 10
         creatorName: '',
         creatorUpiId: '',
     });
+
+    useEffect(() => {
+        const storedId = getStoredUserId();
+        if (storedId) {
+            setUserId(storedId);
+            fetchUserProfile(storedId).then(profile => {
+                if (profile) {
+                    setForm(prev => ({
+                        ...prev,
+                        creatorName: profile.name,
+                        creatorUpiId: profile.upi_id || ''
+                    }));
+                }
+            });
+        }
+    }, []);
 
     const perPerson = form.totalAmount && form.numberOfPeople
         ? Math.floor(Number(form.totalAmount) * 100 / Number(form.numberOfPeople)) / 100
@@ -29,6 +49,12 @@ export default function CreateSplit() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!userId) {
+            setShowOnboarding(true);
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -41,6 +67,7 @@ export default function CreateSplit() {
                     numberOfPeople: Number(form.numberOfPeople),
                     creatorName: form.creatorName,
                     creatorUpiId: form.creatorUpiId,
+                    creatorId: userId
                 }),
             });
 
@@ -51,12 +78,23 @@ export default function CreateSplit() {
             }
 
             toast.success("Split created successfully!");
-            router.push(`/split/${data.data.id}?creator=true`);
+            router.push(`/split/${data.data.id}`); // Removed ?creator=true
         } catch (err) {
             toast.error(err instanceof Error ? err.message : 'Something went wrong');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleOnboardingComplete = (user: { id: string, name: string, upi_id?: string }) => {
+        setUserId(user.id);
+        setShowOnboarding(false);
+        setForm(prev => ({
+            ...prev,
+            creatorName: user.name,
+            creatorUpiId: user.upi_id || ''
+        }));
+        toast.info("Profile created! Tap 'Create' again to finish.");
     };
 
     return (
@@ -98,7 +136,7 @@ export default function CreateSplit() {
                                         type="number"
                                         required
                                         min="10"
-                                        max="100000"
+                                        max="1000000"
                                         placeholder="2400"
                                         className="h-11"
                                         value={form.totalAmount}
@@ -117,7 +155,7 @@ export default function CreateSplit() {
                                             <SelectValue placeholder="How many?" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20].map((n) => (
+                                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 30, 50].map((n) => (
                                                 <SelectItem key={n} value={n.toString()}>{n} people</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -125,37 +163,39 @@ export default function CreateSplit() {
                                 </div>
                             </div>
 
-                            <div className="space-y-4 pt-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="creatorName">Your Name</Label>
-                                    <Input
-                                        id="creatorName"
-                                        required
-                                        maxLength={50}
-                                        placeholder="e.g. Rahul Kumar"
-                                        className="h-11"
-                                        value={form.creatorName}
-                                        onChange={(e) => setForm({ ...form, creatorName: e.target.value })}
-                                    />
-                                </div>
+                            {userId && (
+                                <div className="space-y-4 pt-2 animate-in fade-in duration-500">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="creatorName">Your Name</Label>
+                                        <Input
+                                            id="creatorName"
+                                            required
+                                            maxLength={50}
+                                            placeholder="e.g. Rahul Kumar"
+                                            className="h-11 font-medium bg-muted/20"
+                                            value={form.creatorName}
+                                            onChange={(e) => setForm({ ...form, creatorName: e.target.value })}
+                                        />
+                                    </div>
 
-                                <div className="space-y-2">
-                                    <Label htmlFor="creatorUpiId" className="flex items-center">
-                                        Your UPI ID <CreditCard className="ml-1 h-3 w-3" />
-                                    </Label>
-                                    <Input
-                                        id="creatorUpiId"
-                                        required
-                                        placeholder="yourname@paytm"
-                                        className="h-11"
-                                        value={form.creatorUpiId}
-                                        onChange={(e) => setForm({ ...form, creatorUpiId: e.target.value })}
-                                    />
-                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-                                        Used for generating payment links
-                                    </p>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="creatorUpiId" className="flex items-center">
+                                            Your UPI ID <CreditCard className="ml-1 h-3 w-3" />
+                                        </Label>
+                                        <Input
+                                            id="creatorUpiId"
+                                            required
+                                            placeholder="yourname@paytm"
+                                            className="h-11 font-medium bg-muted/20"
+                                            value={form.creatorUpiId}
+                                            onChange={(e) => setForm({ ...form, creatorUpiId: e.target.value })}
+                                        />
+                                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                            Used for receiving payments
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
                             {perPerson > 0 && (
                                 <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-2xl border border-green-100 dark:border-green-900/30 text-center animate-in zoom-in-95 duration-300">
@@ -185,6 +225,11 @@ export default function CreateSplit() {
                     </form>
                 </Card>
             </div>
+
+            <OnboardingModal
+                isOpen={showOnboarding}
+                onComplete={handleOnboardingComplete}
+            />
         </main>
     );
 }

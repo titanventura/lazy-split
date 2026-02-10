@@ -35,10 +35,12 @@ export async function GET(
                 perPersonAmount: split.per_person_amount,
                 creatorName: split.creator_name,
                 creatorUpiId: split.creator_upi_id,
+                creatorId: split.creator_id,
                 createdAt: split.created_at,
                 participants: participants.map((p: any) => ({
                     id: p.id,
                     name: p.name,
+                    userId: p.user_id,
                     hasPaid: p.has_paid,
                     markedPaidAt: p.marked_paid_at
                 })),

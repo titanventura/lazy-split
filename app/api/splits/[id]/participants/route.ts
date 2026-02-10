@@ -8,7 +8,7 @@ export async function POST(
     try {
         const { id: splitId } = await params;
         const body = await request.json();
-        const { name } = body;
+        const { name, userId } = body;
 
         if (!name || !name.trim()) {
             return NextResponse.json({ success: false, error: 'Name is required' }, { status: 400 });
@@ -25,15 +25,23 @@ export async function POST(
             return NextResponse.json({ success: false, error: 'Split not found' }, { status: 404 });
         }
 
-        // Check if name already exists (case-insensitive search in Supabase usually needs ilike or a specific collation, but for MVP we can use eq and handle it)
-        const { data: existing, error: existingError } = await supabase
-            .from('participants')
-            .select('*')
-            .eq('split_id', splitId)
-            .ilike('name', name.trim())
-            .maybeSingle();
+        // Check if name or userId already exists
+        let query = supabase.from('participants').select('*').eq('split_id', splitId);
+
+        if (userId) {
+            query = query.or(`user_id.eq.${userId},name.ilike."${name.trim()}"`);
+        } else {
+            query = query.ilike('name', name.trim());
+        }
+
+        const { data: existing, error: existingError } = await query.maybeSingle();
 
         if (existing) {
+            // Update userId if it wasn't set
+            if (userId && !existing.user_id) {
+                await supabase.from('participants').update({ user_id: userId }).eq('id', existing.id);
+            }
+
             return NextResponse.json({
                 success: true,
                 data: {
@@ -50,7 +58,8 @@ export async function POST(
             .from('participants')
             .insert({
                 split_id: splitId,
-                name: name.trim()
+                name: name.trim(),
+                user_id: userId || null
             })
             .select()
             .single();
