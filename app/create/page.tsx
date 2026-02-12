@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2, IndianRupee, Users, CreditCard } from "lucide-react";
 import Link from 'next/link';
@@ -43,8 +42,9 @@ export default function CreateSplit() {
         }
     }, []);
 
-    const perPerson = form.totalAmount && form.numberOfPeople
-        ? Math.floor(Number(form.totalAmount) * 100 / Number(form.numberOfPeople)) / 100
+    const numPeople = Number(form.numberOfPeople);
+    const perPerson = form.totalAmount && numPeople > 0
+        ? Math.floor(Number(form.totalAmount) * 100 / numPeople) / 100
         : 0;
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -134,6 +134,7 @@ export default function CreateSplit() {
                                     <Input
                                         id="totalAmount"
                                         type="number"
+                                        inputMode="decimal"
                                         required
                                         min="10"
                                         max="1000000"
@@ -147,19 +148,18 @@ export default function CreateSplit() {
                                     <Label htmlFor="people" className="flex items-center">
                                         People <Users className="ml-1 h-3 w-3" />
                                     </Label>
-                                    <Select
+                                    <Input
+                                        id="people"
+                                        type="number"
+                                        inputMode="numeric"
+                                        required
+                                        min="1"
+                                        max="100"
+                                        placeholder="10"
+                                        className="h-11"
                                         value={form.numberOfPeople}
-                                        onValueChange={(v) => setForm({ ...form, numberOfPeople: v })}
-                                    >
-                                        <SelectTrigger id="people" className="h-11">
-                                            <SelectValue placeholder="How many?" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {[2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 30, 50].map((n) => (
-                                                <SelectItem key={n} value={n.toString()}>{n} people</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                        onChange={(e) => setForm({ ...form, numberOfPeople: e.target.value })}
+                                    />
                                 </div>
                             </div>
 
